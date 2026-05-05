@@ -24,9 +24,14 @@ jobs:
       - name: Run Job Bot
         run: python job_bot.py
 
-      # new step
       - name: Upload Excel
         uses: actions/upload-artifact@v4
         with:
           name: qa-jobs-report
           path: QA_Jobs_*.xlsx
+
+      - name: Send Email
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python send_email.py
