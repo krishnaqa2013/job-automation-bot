@@ -13,25 +13,29 @@ KEYWORDS = [
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 def fetch_indeed_jobs():
+    import requests
+    from bs4 import BeautifulSoup
+
     jobs = []
-    for keyword in KEYWORDS:
-        url = f"https://in.indeed.com/jobs?q={keyword}&l=India&fromage=3"
-        res = requests.get(url, headers=HEADERS)
-        soup = BeautifulSoup(res.text, "html.parser")
+    url = "https://in.indeed.com/jobs?q=QA+Automation&l=India&fromage=3"
 
-        for card in soup.select(".job_seen_beacon"):
-            title = card.select_one("h2").text.strip()
-            company = card.select_one(".companyName").text.strip()
-            location = card.select_one(".companyLocation").text.strip()
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers)
+    soup = BeautifulSoup(res.text, "html.parser")
 
-            jobs.append({
-                "Title": title,
-                "Company": company,
-                "Location": location,
-                "Source": "Indeed"
-            })
+    for card in soup.find_all("div", {"class": "job_seen_beacon"}):
+        title_elem = card.find("h2")
+        company_elem = card.find("span", {"class": "companyName"})
+
+        if not title_elem or not company_elem:
+            continue
+
+        jobs.append({
+            "Title": title_elem.text.strip(),
+            "Company": company_elem.text.strip()
+        })
+
     return jobs
-
 def score_job(title):
     score = 0
     title_lower = title.lower()
