@@ -1,75 +1,32 @@
-import requests
-from bs4 import BeautifulSoup
+import feedparser
 import pandas as pd
 from datetime import datetime
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+# 🔹 RSS URLs (last 3 days filter built-in)
+RSS_FEEDS = [
+    "https://in.indeed.com/rss?q=QA+Automation+Lead&l=India&fromage=3",
+    "https://in.indeed.com/rss?q=Senior+SDET+Automation&l=India&fromage=3",
+    "https://in.indeed.com/rss?q=Test+Automation+Architect&l=India&fromage=3"
+]
 
 
-# 🔹 Indeed (structured extraction)
-def fetch_indeed_jobs():
+# 🔹 Fetch jobs from RSS
+def fetch_jobs():
     jobs = []
 
-    url = "https://in.indeed.com/jobs?q=QA+Automation+Lead&l=India&fromage=3"
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
 
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        cards = soup.find_all("div", class_="job_seen_beacon")
-
-        for card in cards:
-            title_tag = card.find("h2")
-            company_tag = card.find("span", class_="companyName")
-
-            if title_tag and company_tag:
-                title = title_tag.get_text(strip=True)
-                company = company_tag.get_text(strip=True)
-
-                jobs.append({
-                    "Title": title,
-                    "Company": company,
-                    "Source": "Indeed"
-                })
-
-    except Exception as e:
-        print("Indeed error:", e)
-
-    return jobs
-
-
-# 🔹 Naukri (basic parsing)
-def fetch_naukri_jobs():
-    jobs = []
-
-    url = "https://www.naukri.com/qa-automation-lead-jobs-in-india"
-
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        cards = soup.find_all("a", class_="title")
-
-        for card in cards[:20]:
-            title = card.get_text(strip=True)
-
+        for entry in feed.entries:
             jobs.append({
-                "Title": title,
-                "Company": "Unknown",
-                "Source": "Naukri"
+                "Title": entry.title,
+                "Company": entry.get("author", "Unknown"),
+                "Link": entry.link,
+                "Published": entry.get("published", ""),
+                "Source": "Indeed RSS"
             })
 
-    except Exception as e:
-        print("Naukri error:", e)
-
     return jobs
-
-
-# 🔹 Fallback (last resort only)
-def fallback_jobs():
-    return [
-        {"Title": "QA Automation Lead Selenium Playwright", "Company": "Fallback", "Source": "Static"}
-    ]
 
 
 # 🔹 Filter
@@ -96,29 +53,22 @@ def score_job(title):
 
 # 🔹 Main
 def main():
-    print("🚀 Running V2.1 Job Bot...")
+    print("🚀 Running V3 Job Bot (RSS Mode)...")
 
-    jobs = []
-    jobs += fetch_indeed_jobs()
-    jobs += fetch_naukri_jobs()
-
-    print("Fetched total:", len(jobs))
+    jobs = fetch_jobs()
+    print("Fetched:", len(jobs))
 
     if not jobs:
-        print("⚠️ Using fallback")
-        jobs = fallback_jobs()
+        print("❌ No jobs fetched")
+        return
 
     df = pd.DataFrame(jobs).drop_duplicates()
-
-    if "Title" not in df.columns:
-        print("❌ Missing Title column")
-        return
 
     df = filter_jobs(df)
 
     if df.empty:
-        print("⚠️ No jobs after filtering → fallback")
-        df = pd.DataFrame(fallback_jobs())
+        print("⚠️ No jobs after filtering")
+        return
 
     df["Score"] = df["Title"].apply(score_job)
 
