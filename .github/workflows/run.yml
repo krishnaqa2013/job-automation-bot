@@ -24,11 +24,16 @@ jobs:
       - name: Run Job Bot
         run: python job_bot.py
 
+      - name: Run Recruiter Bot
+        run: python recruiter_bot.py
+
       - name: Upload Excel
         uses: actions/upload-artifact@v4
         with:
           name: qa-jobs-report
-          path: QA_Jobs_*.xlsx
+          path: |
+            QA_Jobs_*.xlsx
+            recruiter_report.xlsx
 
       - name: Send Email
         env:
