@@ -3,94 +3,108 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept-Language": "en-US,en;q=0.9"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# 🔹 Fetch jobs from Indeed (basic + safe)
-def fetch_indeed_jobs():
+KEYWORDS = [
+    "QA Automation Lead Playwright Selenium India",
+    "Senior SDET API Automation India",
+    "Test Automation Architect Selenium Java India",
+    "QA Automation Manager API Selenium India"
+]
+
+
+# 🔹 Google Jobs (stable source)
+def fetch_google_jobs():
     jobs = []
-    url = "https://in.indeed.com/jobs?q=QA+Automation&l=India&fromage=3"
 
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
+    for keyword in KEYWORDS:
+        url = f"https://www.google.com/search?q={keyword.replace(' ', '+')}+jobs"
 
-        for card in soup.find_all("a"):
-            title = card.get_text(strip=True)
+        try:
+            res = requests.get(url, headers=HEADERS, timeout=10)
+            soup = BeautifulSoup(res.text, "html.parser")
 
-            if title and len(title) > 10 and "QA" in title.upper():
-                jobs.append({
-                    "Title": title,
-                    "Company": "Unknown",
-                    "Source": "Indeed"
-                })
+            for g in soup.select("div"):
+                text = g.get_text(" ", strip=True)
 
-    except Exception as e:
-        print("❌ Error fetching Indeed jobs:", e)
+                if any(x in text for x in ["QA", "SDET", "Automation"]) and len(text) < 200:
+                    jobs.append({
+                        "Title": text,
+                        "Company": "Unknown",
+                        "Source": "Google"
+                    })
+
+        except Exception as e:
+            print("Error:", e)
 
     return jobs
 
 
-# 🔹 Fallback jobs (prevents failure)
+# 🔹 Fallback (never fail)
 def fallback_jobs():
     return [
-        {"Title": "QA Automation Lead Selenium", "Company": "Fallback", "Source": "Static"},
+        {"Title": "QA Automation Lead Selenium Playwright", "Company": "Fallback", "Source": "Static"},
         {"Title": "Senior SDET API Automation", "Company": "Fallback", "Source": "Static"},
         {"Title": "Test Automation Architect Java Selenium", "Company": "Fallback", "Source": "Static"}
     ]
 
 
-# 🔹 Scoring logic
+# 🔹 Strong filtering
+def filter_jobs(df):
+    df = df[df["Title"].str.contains("QA|SDET|Automation", case=False)]
+    df = df[df["Title"].str.contains("Senior|Lead|Architect|Manager", case=False)]
+    df = df[df["Title"].str.contains("Selenium|Playwright|API", case=False)]
+    return df
+
+
+# 🔹 Smart scoring
 def score_job(title):
     score = 0
-    title_lower = title.lower()
+    t = title.lower()
 
-    if "playwright" in title_lower or "selenium" in title_lower:
-        score += 3
-    if "api" in title_lower:
-        score += 2
-    if "lead" in title_lower or "architect" in title_lower or "manager" in title_lower:
-        score += 2
-    if "automation" in title_lower:
-        score += 1
+    if "playwright" in t: score += 3
+    if "selenium" in t: score += 2
+    if "api" in t: score += 2
+    if "lead" in t or "architect" in t: score += 2
+    if "manager" in t: score += 1
 
     return score
 
 
-# 🔹 Main execution
+# 🔹 Main
 def main():
-    print("🚀 Starting Job Bot...")
+    print("🚀 Running V2 Job Bot...")
 
-    jobs = fetch_indeed_jobs()
-    print("Jobs fetched:", len(jobs))
+    jobs = fetch_google_jobs()
+    print("Fetched:", len(jobs))
 
-    # Fallback if empty
     if not jobs:
-        print("⚠️ No jobs from Indeed. Using fallback data.")
+        print("⚠️ Using fallback data")
         jobs = fallback_jobs()
 
     df = pd.DataFrame(jobs).drop_duplicates()
 
-    print("Columns:", df.columns)
-
-    # Safety check
     if "Title" not in df.columns:
-        print("❌ Missing 'Title' column. Exiting safely.")
+        print("❌ Missing Title column")
         return
 
-    # Scoring
+    df = filter_jobs(df)
+
+    if df.empty:
+        print("⚠️ No jobs after filtering. Using fallback")
+        df = pd.DataFrame(fallback_jobs())
+
     df["Score"] = df["Title"].apply(score_job)
 
-    # Filter good jobs
-    df = df[df["Score"] >= 3]
+    df = df[df["Score"] >= 5]
 
-    # Save file
+    df = df.sort_values(by="Score", ascending=False)
+
     filename = f"QA_Jobs_{datetime.now().date()}.xlsx"
     df.to_excel(filename, index=False)
 
-    print(f"✅ File saved: {filename}")
+    print(f"✅ Saved: {filename}")
+    print(f"Final jobs count: {len(df)}")
 
 
 if __name__ == "__main__":
