@@ -3,26 +3,37 @@ import glob
 import smtplib
 from email.message import EmailMessage
 
-def get_latest_file():
+EMAIL = os.environ["EMAIL_USER"]
+PASSWORD = os.environ["EMAIL_PASS"]
+
+
+def latest_file():
     files = sorted(glob.glob("QA_Jobs_*.xlsx"))
     return files[-1] if files else None
 
-def send_email():
-    sender = os.environ["EMAIL_USER"]
-    password = os.environ["EMAIL_PASS"]
-    receiver = sender  # sending to yourself
 
-    file_path = get_latest_file()
+def send_email():
+    file_path = latest_file()
 
     if not file_path:
-        print("❌ No Excel file found to send.")
+        print("❌ No Excel file found")
         return
 
     msg = EmailMessage()
-    msg["Subject"] = "📊 Daily QA Jobs Report"
-    msg["From"] = sender
-    msg["To"] = receiver
-    msg.set_content("Attached is your latest QA jobs report.")
+
+    msg["Subject"] = "📊 Daily QA Automation Jobs Report"
+    msg["From"] = EMAIL
+    msg["To"] = EMAIL
+
+    msg.set_content("""
+Daily QA Automation job report attached.
+
+Includes:
+- Senior QA roles
+- Lead / Architect / SDET openings
+- Hybrid Hyderabad + Remote India jobs
+- Last 3 days postings
+""")
 
     with open(file_path, "rb") as f:
         msg.add_attachment(
@@ -34,12 +45,14 @@ def send_email():
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(sender, password)
+            smtp.login(EMAIL, PASSWORD)
             smtp.send_message(msg)
-            print("✅ Email sent successfully!")
+
+        print("✅ Email sent successfully")
 
     except Exception as e:
-        print("❌ Email sending failed:", e)
+        print("❌ Email failed:", str(e))
+
 
 if __name__ == "__main__":
     send_email()
