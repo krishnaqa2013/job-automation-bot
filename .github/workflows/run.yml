@@ -2,7 +2,7 @@ name: Daily QA Job Bot
 
 on:
   schedule:
-    - cron: '30 3 * * *'   # 9:00 AM IST
+    - cron: '30 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,129 +11,42 @@ jobs:
 
     steps:
 
-      # ---------------------------------------------------
-      # STEP 1 - Checkout Repository
-      # ---------------------------------------------------
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # ---------------------------------------------------
-      # STEP 2 - Setup Python
-      # ---------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # ---------------------------------------------------
-      # STEP 3 - Debug Python Version
-      # ---------------------------------------------------
-      - name: Debug Python
-        run: |
-          echo "Python Version:"
-          python --version
-
-          echo "Pip Version:"
-          pip --version
-
-      # ---------------------------------------------------
-      # STEP 4 - Install Dependencies
-      # ---------------------------------------------------
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas openpyxl
+          pip install -r requirements.txt
 
-      # ---------------------------------------------------
-      # STEP 5 - Debug Installed Packages
-      # ---------------------------------------------------
       - name: Debug Packages
-        run: |
-          echo "Installed Packages:"
-          pip list
+        run: pip list
 
-      # ---------------------------------------------------
-      # STEP 6 - Show Repository Files
-      # ---------------------------------------------------
-      - name: Show Repository Files
-        run: |
-          echo "Current Directory:"
-          pwd
-
-          echo "Repository Files:"
-          ls -la
-
-      # ---------------------------------------------------
-      # STEP 7 - Run Job Bot
-      # ---------------------------------------------------
       - name: Run Job Bot
         run: |
           echo "Running job_bot.py"
           python job_bot.py
 
-      # ---------------------------------------------------
-      # STEP 8 - Show Files After Job Bot
-      # ---------------------------------------------------
-      - name: Show Files After Job Bot
+      - name: Show Files
         run: |
-          echo "Files After Execution:"
+          pwd
           ls -la
-
-      # ---------------------------------------------------
-      # STEP 9 - Verify Excel File Exists
-      # ---------------------------------------------------
-      - name: Verify Excel File
-        run: |
-          echo "Searching Excel Files..."
-
           find . -name "*.xlsx"
 
-      # ---------------------------------------------------
-      # STEP 10 - Upload Excel Artifact
-      # ---------------------------------------------------
       - name: Upload Excel
         uses: actions/upload-artifact@v4
         with:
           name: qa-job-report
           path: QA_Jobs_*.xlsx
 
-      # ---------------------------------------------------
-      # STEP 11 - Debug Secrets
-      # ---------------------------------------------------
-      - name: Debug Secrets
-        run: |
-          if [ -z "$EMAIL_USER" ]; then
-            echo "EMAIL_USER is EMPTY"
-          else
-            echo "EMAIL_USER exists"
-          fi
-
-          if [ -z "$EMAIL_PASS" ]; then
-            echo "EMAIL_PASS is EMPTY"
-          else
-            echo "EMAIL_PASS exists"
-          fi
-        env:
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-
-      # ---------------------------------------------------
-      # STEP 12 - Send Email
-      # ---------------------------------------------------
       - name: Send Email
         if: always()
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: |
-          echo "Running send_email.py"
-          python send_email.py
-
-      # ---------------------------------------------------
-      # STEP 13 - Final Debug
-      # ---------------------------------------------------
-      - name: Final Debug
-        if: always()
-        run: |
-          echo "Workflow completed"
-          ls -la
+        run: python send_email.py
