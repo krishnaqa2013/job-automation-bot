@@ -1,52 +1,25 @@
 import requests
-from bs4 import BeautifulSoup
 import pandas as pd
+import os
 from datetime import datetime
+import time
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+# ---------------------------------------------------
+# APIFY TOKEN
+# ---------------------------------------------------
 
-SEARCH_URLS = [
+APIFY_TOKEN = os.getenv("APIFY_TOKEN")
 
-    {
-        "portal": "Google Jobs",
-        "location": "Hyderabad",
-        "mode": "Hybrid",
-        "url": "https://www.google.com/search?q=QA+Automation+Hyderabad+jobs"
-    },
+# ---------------------------------------------------
+# ACTORS
+# ---------------------------------------------------
 
-    {
-        "portal": "Google Jobs",
-        "location": "India",
-        "mode": "Remote",
-        "url": "https://www.google.com/search?q=SDET+Remote+India+jobs"
-    },
+LINKEDIN_ACTOR = "curious_coder/linkedin-jobs-scraper"
+NAUKRI_ACTOR = "automation-lab/naukri-scraper"
 
-    {
-        "portal": "Google Jobs",
-        "location": "India",
-        "mode": "Remote",
-        "url": "https://www.google.com/search?q=Playwright+Automation+India+jobs"
-    }
-]
-
-
-def estimate_salary(title):
-
-    t = title.lower()
-
-    if "lead" in t:
-        return "28-40"
-
-    if "architect" in t:
-        return "35-50"
-
-    if "senior" in t:
-        return "22-35"
-
-    return "18-30"
-
+# ---------------------------------------------------
+# SCORING
+# ---------------------------------------------------
 
 def score_job(title):
 
@@ -71,99 +44,243 @@ def score_job(title):
 
     return score
 
+# ---------------------------------------------------
+# SALARY ESTIMATION
+# ---------------------------------------------------
 
-def is_relevant(title):
+def estimate_salary(title):
 
     t = title.lower()
 
-    keywords = [
-        "qa",
-        "automation",
-        "sdet",
-        "playwright",
-        "selenium",
-        "test"
-    ]
+    if "architect" in t:
+        return "35-50"
 
-    return any(k in t for k in keywords)
+    if "lead" in t:
+        return "28-40"
 
+    if "manager" in t:
+        return "30-45"
 
-def fetch_jobs():
+    if "senior" in t:
+        return "22-35"
 
-    jobs = []
+    return "18-30"
 
-    for source in SEARCH_URLS:
+# ---------------------------------------------------
+# RUN APIFY ACTOR
+# ---------------------------------------------------
 
-        print("Fetching:", source["url"])
+def run_actor(actor_id, payload):
 
-        try:
+    url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
-            response = requests.get(
-                source["url"],
-                headers=HEADERS,
-                timeout=20
+    response = requests.post(
+        url,
+        json=payload
+    )
+
+    run = response.json()
+
+    run_id = run["data"]["id"]
+
+    print("Run ID:", run_id)
+
+    # Wait for completion
+    while True:
+
+        status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
+
+        status_response = requests.get(status_url)
+
+        status_data = status_response.json()
+
+        status = status_data["data"]["status"]
+
+        print("Status:", status)
+
+        if status == "SUCCEEDED":
+            break
+
+        if status in ["FAILED", "ABORTED", "TIMED-OUT"]:
+            return []
+
+        time.sleep(15)
+
+    dataset_id = status_data["data"]["defaultDatasetId"]
+
+    dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?clean=true"
+
+    dataset_response = requests.get(dataset_url)
+
+    return dataset_response.json()
+
+# ---------------------------------------------------
+# LINKEDIN JOBS
+# ---------------------------------------------------
+
+def fetch_linkedin_jobs():
+
+    payload = {
+        "urls": [
+            "https://www.linkedin.com/jobs/search/?keywords=QA+Automation+Lead&location=Hyderabad%2C+Telangana%2C+India",
+            "https://www.linkedin.com/jobs/search/?keywords=SDET+Remote+India",
+            "https://www.linkedin.com/jobs/search/?keywords=Playwright+Automation+India"
+        ],
+        "count": 15
+    }
+
+    jobs = run_actor(
+        LINKEDIN_ACTOR,
+        payload
+    )
+
+    formatted = []
+
+    for j in jobs:
+
+        title = j.get("title", "")
+
+        if not title:
+            continue
+
+        formatted.append({
+
+            "Job Title": title,
+
+            "Company": j.get(
+                "companyName",
+                "Unknown"
+            ),
+
+            "Portal": "LinkedIn",
+
+            "Location": j.get(
+                "location",
+                ""
+            ),
+
+            "Hybrid/Remote": "Remote"
+            if "remote" in str(
+                j.get("location", "")
+            ).lower()
+            else "Hybrid",
+
+            "Posted Date": j.get(
+                "postedTime",
+                ""
+            ),
+
+            "Salary (LPA)": estimate_salary(
+                title
+            ),
+
+            "Score": score_job(title),
+
+            "Apply Link": j.get(
+                "jobUrl",
+                ""
             )
+        })
 
-            soup = BeautifulSoup(
-                response.text,
-                "html.parser"
+    return formatted
+
+# ---------------------------------------------------
+# NAUKRI JOBS
+# ---------------------------------------------------
+
+def fetch_naukri_jobs():
+
+    payload = {
+        "keyword": "QA Automation Selenium Playwright",
+        "location": "hyderabad",
+        "experienceMin": 8,
+        "maxJobs": 15,
+        "sortBy": "date"
+    }
+
+    jobs = run_actor(
+        NAUKRI_ACTOR,
+        payload
+    )
+
+    formatted = []
+
+    for j in jobs:
+
+        title = j.get("title", "")
+
+        if not title:
+            continue
+
+        formatted.append({
+
+            "Job Title": title,
+
+            "Company": j.get(
+                "company",
+                "Unknown"
+            ),
+
+            "Portal": "Naukri",
+
+            "Location": j.get(
+                "location",
+                ""
+            ),
+
+            "Hybrid/Remote": "Hybrid",
+
+            "Posted Date": j.get(
+                "date",
+                ""
+            ),
+
+            "Salary (LPA)": estimate_salary(
+                title
+            ),
+
+            "Score": score_job(title),
+
+            "Apply Link": j.get(
+                "url",
+                ""
             )
+        })
 
-            titles = soup.find_all("h3")
+    return formatted
 
-            print("Titles found:", len(titles))
-
-            for t in titles:
-
-                title = t.get_text(strip=True)
-
-                if not title:
-                    continue
-
-                if not is_relevant(title):
-                    continue
-
-                jobs.append({
-
-                    "Job Title": title,
-
-                    "Company": "Google Search",
-
-                    "Portal": source["portal"],
-
-                    "Location": source["location"],
-
-                    "Hybrid/Remote": source["mode"],
-
-                    "Posted Date": str(
-                        datetime.now().date()
-                    ),
-
-                    "Salary (LPA)": estimate_salary(title),
-
-                    "Score": score_job(title),
-
-                    "Apply Link": source["url"]
-                })
-
-        except Exception as e:
-
-            print("Error:", str(e))
-
-    return jobs
-
+# ---------------------------------------------------
+# MAIN
+# ---------------------------------------------------
 
 def main():
 
-    print("🚀 Running QA Job Bot V6")
+    print("🚀 Running APIFY QA JOB BOT")
 
-    jobs = fetch_jobs()
+    all_jobs = []
 
-    print("Jobs fetched:", len(jobs))
+    # LinkedIn
+    try:
+        linkedin_jobs = fetch_linkedin_jobs()
+        print("LinkedIn Jobs:", len(linkedin_jobs))
+        all_jobs.extend(linkedin_jobs)
 
-    if not jobs:
+    except Exception as e:
+        print("LinkedIn Error:", str(e))
 
-        jobs = [{
+    # Naukri
+    try:
+        naukri_jobs = fetch_naukri_jobs()
+        print("Naukri Jobs:", len(naukri_jobs))
+        all_jobs.extend(naukri_jobs)
+
+    except Exception as e:
+        print("Naukri Error:", str(e))
+
+    # Fallback
+    if not all_jobs:
+
+        all_jobs = [{
             "Job Title": "No QA jobs found today",
             "Company": "-",
             "Portal": "-",
@@ -175,12 +292,14 @@ def main():
             "Apply Link": "-"
         }]
 
-    df = pd.DataFrame(jobs)
+    df = pd.DataFrame(all_jobs)
 
+    # Remove duplicates
     df = df.drop_duplicates(
-        subset=["Job Title"]
+        subset=["Job Title", "Company"]
     )
 
+    # Sort by score
     if "Score" in df.columns:
 
         df = df.sort_values(
@@ -224,8 +343,7 @@ def main():
                 50
             )
 
-    print("✅ Excel saved:", filename)
-
+    print("✅ Excel Saved:", filename)
 
 if __name__ == "__main__":
     main()
