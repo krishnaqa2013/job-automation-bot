@@ -2,7 +2,6 @@ import requests
 import pandas as pd
 import os
 from datetime import datetime
-import time
 
 # ---------------------------------------------------
 # APIFY TOKEN
@@ -11,11 +10,12 @@ import time
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
 
 # ---------------------------------------------------
-# ACTORS
+# TASK IDS
 # ---------------------------------------------------
 
-LINKEDIN_ACTOR = "curious_coder/linkedin-jobs-scraper"
-NAUKRI_ACTOR = "automation-lab/naukri-scraper"
+LINKEDIN_TASK = "a_krishnaqa/linkedin-qa-jobs"
+
+NAUKRI_TASK = "a_krishnaqa/naukri-qa-jobs"
 
 # ---------------------------------------------------
 # SCORE JOB
@@ -67,86 +67,37 @@ def estimate_salary(title):
     return "18-30"
 
 # ---------------------------------------------------
-# RUN ACTOR
+# RUN TASK
 # ---------------------------------------------------
 
-def run_actor(actor_id, payload):
+def run_task(task_id):
 
-    print(f"\n🚀 Running Actor: {actor_id}")
+    print(f"\n🚀 Running Task: {task_id}")
 
-    url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
+    url = f"https://api.apify.com/v2/actor-tasks/{task_id}/run-sync-get-dataset-items?token={APIFY_TOKEN}"
 
-    response = requests.post(
-        url,
-        json=payload
-    )
+    response = requests.post(url)
 
     print("Status Code:", response.status_code)
 
     try:
-        run = response.json()
+
+        data = response.json()
+
     except:
-        print("❌ Failed JSON response")
+
+        print("❌ Failed JSON")
+
         return []
 
-    print("Actor Response:")
-    print(run)
+    print("Items Returned:", len(data))
 
-    if "data" not in run:
-        print("❌ No data field found")
-        return []
+    if len(data) > 0:
 
-    run_id = run["data"]["id"]
+        print("Sample Item:")
+        print(data[0])
 
-    print("Run ID:", run_id)
-
-    # ---------------------------------------------------
-    # WAIT FOR COMPLETION
-    # ---------------------------------------------------
-
-    while True:
-
-        status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-
-        status_response = requests.get(status_url)
-
-        status_data = status_response.json()
-
-        status = status_data["data"]["status"]
-
-        print("Current Status:", status)
-
-        if status == "SUCCEEDED":
-            break
-
-        if status in ["FAILED", "ABORTED", "TIMED-OUT"]:
-            print("❌ Actor failed")
-            return []
-
-        time.sleep(15)
-
-    dataset_id = status_data["data"]["defaultDatasetId"]
-
-    print("Dataset ID:", dataset_id)
-
-    dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?clean=true"
-
-    dataset_response = requests.get(dataset_url)
-
-    try:
-        items = dataset_response.json()
-    except:
-        print("❌ Failed dataset JSON")
-        return []
-
-    print("Dataset Items Count:", len(items))
-
-    print("Sample Dataset Item:")
-
-    if len(items) > 0:
-        print(items[0])
-
-    return items
+    return data
 
 # ---------------------------------------------------
 # FETCH LINKEDIN JOBS
@@ -154,30 +105,11 @@ def run_actor(actor_id, payload):
 
 def fetch_linkedin_jobs():
 
-    payload = {
-
-        "urls": [
-            "https://www.linkedin.com/jobs/search/?keywords=QA+Automation+Lead&location=Hyderabad%2C+Telangana%2C+India",
-
-            "https://www.linkedin.com/jobs/search/?keywords=SDET+Remote+India",
-
-            "https://www.linkedin.com/jobs/search/?keywords=Playwright+Automation+India"
-        ],
-
-        "count": 10
-    }
-
-    jobs = run_actor(
-        LINKEDIN_ACTOR,
-        payload
-    )
+    jobs = run_task(LINKEDIN_TASK)
 
     formatted = []
 
     for j in jobs:
-
-        print("\nLinkedIn Item:")
-        print(j)
 
         title = str(
             j.get("title", "")
@@ -233,30 +165,11 @@ def fetch_linkedin_jobs():
 
 def fetch_naukri_jobs():
 
-    payload = {
-
-        "keyword": "QA Automation Selenium Playwright",
-
-        "location": "hyderabad",
-
-        "experienceMin": 8,
-
-        "maxJobs": 10,
-
-        "sortBy": "date"
-    }
-
-    jobs = run_actor(
-        NAUKRI_ACTOR,
-        payload
-    )
+    jobs = run_task(NAUKRI_TASK)
 
     formatted = []
 
     for j in jobs:
-
-        print("\nNaukri Item:")
-        print(j)
 
         title = str(
             j.get("title", "")
@@ -308,55 +221,41 @@ def fetch_naukri_jobs():
 
 def main():
 
-    print("🚀 Running APIFY QA JOB BOT DEBUG")
+    print("🚀 Running APIFY TASK QA JOB BOT")
 
     all_jobs = []
 
-    # ---------------------------------------------------
-    # LINKEDIN
-    # ---------------------------------------------------
-
+    # LinkedIn
     try:
 
         linkedin_jobs = fetch_linkedin_jobs()
 
-        print("\n✅ LinkedIn Jobs Parsed:")
-        print(linkedin_jobs)
-
-        print("LinkedIn Jobs Count:", len(linkedin_jobs))
+        print("LinkedIn Jobs:", len(linkedin_jobs))
 
         all_jobs.extend(linkedin_jobs)
 
     except Exception as e:
 
-        print("❌ LinkedIn Error:", str(e))
+        print("LinkedIn Error:", str(e))
 
-    # ---------------------------------------------------
-    # NAUKRI
-    # ---------------------------------------------------
-
+    # Naukri
     try:
 
         naukri_jobs = fetch_naukri_jobs()
 
-        print("\n✅ Naukri Jobs Parsed:")
-        print(naukri_jobs)
-
-        print("Naukri Jobs Count:", len(naukri_jobs))
+        print("Naukri Jobs:", len(naukri_jobs))
 
         all_jobs.extend(naukri_jobs)
 
     except Exception as e:
 
-        print("❌ Naukri Error:", str(e))
+        print("Naukri Error:", str(e))
 
     # ---------------------------------------------------
     # FALLBACK
     # ---------------------------------------------------
 
     if not all_jobs:
-
-        print("⚠️ No jobs found")
 
         all_jobs = [{
             "Job Title": "No QA jobs found today",
@@ -411,8 +310,11 @@ def main():
             for cell in col:
 
                 try:
+
                     if len(str(cell.value)) > max_length:
+
                         max_length = len(str(cell.value))
+
                 except:
                     pass
 
