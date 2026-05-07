@@ -1,3 +1,4 @@
 pandas
 openpyxl
-feedparser
+beautifulsoup4
+requests
