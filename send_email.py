@@ -6,53 +6,39 @@ from email.message import EmailMessage
 EMAIL = os.environ["EMAIL_USER"]
 PASSWORD = os.environ["EMAIL_PASS"]
 
+files = glob.glob("QA_Jobs_*.xlsx")
 
-def latest_file():
-    files = sorted(glob.glob("QA_Jobs_*.xlsx"))
-    return files[-1] if files else None
+print("Found files:", files)
 
+if not files:
+    print("❌ No Excel file found")
+    exit()
 
-def send_email():
-    file_path = latest_file()
+latest_file = sorted(files)[-1]
 
-    if not file_path:
-        print("❌ No Excel file found")
-        return
+msg = EmailMessage()
 
-    msg = EmailMessage()
+msg["Subject"] = "QA Jobs Report"
+msg["From"] = EMAIL
+msg["To"] = EMAIL
 
-    msg["Subject"] = "📊 Daily QA Automation Jobs Report"
-    msg["From"] = EMAIL
-    msg["To"] = EMAIL
+msg.set_content("Attached QA jobs report.")
 
-    msg.set_content("""
-Daily QA Automation job report attached.
+with open(latest_file, "rb") as f:
+    msg.add_attachment(
+        f.read(),
+        maintype="application",
+        subtype="octet-stream",
+        filename=latest_file
+    )
 
-Includes:
-- Senior QA roles
-- Lead / Architect / SDET openings
-- Hybrid Hyderabad + Remote India jobs
-- Last 3 days postings
-""")
+try:
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(EMAIL, PASSWORD)
+        smtp.send_message(msg)
 
-    with open(file_path, "rb") as f:
-        msg.add_attachment(
-            f.read(),
-            maintype="application",
-            subtype="octet-stream",
-            filename=file_path
-        )
+    print("✅ Email sent successfully")
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(EMAIL, PASSWORD)
-            smtp.send_message(msg)
-
-        print("✅ Email sent successfully")
-
-    except Exception as e:
-        print("❌ Email failed:", str(e))
-
-
-if __name__ == "__main__":
-    send_email()
+except Exception as e:
+    print("❌ Email failed")
+    print(e)
