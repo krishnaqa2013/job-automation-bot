@@ -2,7 +2,7 @@ name: Daily QA Job Bot
 
 on:
   schedule:
-    - cron: '30 3 * * *'
+    - cron: '30 3 * * *'   # 9:00 AM IST
   workflow_dispatch:
 
 jobs:
@@ -11,42 +11,79 @@ jobs:
 
     steps:
 
+      # -----------------------------------------
+      # Checkout Repository
+      # -----------------------------------------
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      # -----------------------------------------
+      # Setup Python
+      # -----------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      # -----------------------------------------
+      # Install Dependencies
+      # -----------------------------------------
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # -----------------------------------------
+      # Debug Installed Packages
+      # -----------------------------------------
       - name: Debug Packages
-        run: pip list
+        run: |
+          pip list
 
+      # -----------------------------------------
+      # Run Job Bot
+      # -----------------------------------------
       - name: Run Job Bot
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
         run: |
           echo "Running job_bot.py"
           python job_bot.py
 
+      # -----------------------------------------
+      # Show Generated Files
+      # -----------------------------------------
       - name: Show Files
         run: |
           pwd
           ls -la
           find . -name "*.xlsx"
 
+      # -----------------------------------------
+      # Upload Excel Report
+      # -----------------------------------------
       - name: Upload Excel
         uses: actions/upload-artifact@v4
         with:
           name: qa-job-report
           path: QA_Jobs_*.xlsx
 
+      # -----------------------------------------
+      # Send Email
+      # -----------------------------------------
       - name: Send Email
         if: always()
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: python send_email.py
+        run: |
+          python send_email.py
+
+      # -----------------------------------------
+      # Final Debug
+      # -----------------------------------------
+      - name: Final Debug
+        if: always()
+        run: |
+          echo "Workflow Completed"
+          ls -la
