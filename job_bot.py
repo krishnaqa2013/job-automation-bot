@@ -1,102 +1,52 @@
-import feedparser
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
 
-# ---------------------------------------------------
-# RSS FEEDS
-# ---------------------------------------------------
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-RSS_FEEDS = [
+SEARCH_URLS = [
 
-    # Hyderabad Hybrid Jobs
     {
-        "portal": "Indeed",
+        "portal": "Google Jobs",
         "location": "Hyderabad",
         "mode": "Hybrid",
-        "url": "https://in.indeed.com/rss?q=QA+Automation+Hyderabad&fromage=3"
+        "url": "https://www.google.com/search?q=QA+Automation+Hyderabad+jobs"
     },
 
     {
-        "portal": "Indeed",
-        "location": "Hyderabad",
-        "mode": "Hybrid",
-        "url": "https://in.indeed.com/rss?q=SDET+Hyderabad&fromage=3"
-    },
-
-    # India Remote Jobs
-    {
-        "portal": "Indeed",
+        "portal": "Google Jobs",
         "location": "India",
         "mode": "Remote",
-        "url": "https://in.indeed.com/rss?q=QA+Automation+Remote+India&fromage=3"
+        "url": "https://www.google.com/search?q=SDET+Remote+India+jobs"
     },
 
     {
-        "portal": "Indeed",
+        "portal": "Google Jobs",
         "location": "India",
         "mode": "Remote",
-        "url": "https://in.indeed.com/rss?q=Playwright+Automation+India&fromage=3"
-    },
-
-    {
-        "portal": "Indeed",
-        "location": "India",
-        "mode": "Remote",
-        "url": "https://in.indeed.com/rss?q=QA+Lead+Remote&fromage=3"
+        "url": "https://www.google.com/search?q=Playwright+Automation+India+jobs"
     }
 ]
 
-
-# ---------------------------------------------------
-# FILTER RELEVANT JOBS
-# ---------------------------------------------------
-
-def is_relevant(title):
-
-    t = title.lower()
-
-    keywords = [
-        "qa",
-        "automation",
-        "sdet",
-        "playwright",
-        "selenium",
-        "api",
-        "test"
-    ]
-
-    return any(k in t for k in keywords)
-
-
-# ---------------------------------------------------
-# ESTIMATE SALARY
-# ---------------------------------------------------
 
 def estimate_salary(title):
 
     t = title.lower()
 
-    if "architect" in t:
-        return "35-50"
-
     if "lead" in t:
         return "28-40"
 
-    if "manager" in t:
-        return "30-45"
+    if "architect" in t:
+        return "35-50"
 
     if "senior" in t:
         return "22-35"
 
-    if "sdet" in t:
-        return "25-35"
-
     return "18-30"
 
-
-# ---------------------------------------------------
-# SCORE JOB
-# ---------------------------------------------------
 
 def score_job(title):
 
@@ -113,94 +63,108 @@ def score_job(title):
     if "api" in t:
         score += 2
 
-    if "lead" in t:
+    if "automation" in t:
         score += 2
 
-    if "automation" in t:
+    if "lead" in t:
         score += 1
 
     return score
 
 
-# ---------------------------------------------------
-# FETCH JOBS
-# ---------------------------------------------------
+def is_relevant(title):
+
+    t = title.lower()
+
+    keywords = [
+        "qa",
+        "automation",
+        "sdet",
+        "playwright",
+        "selenium",
+        "test"
+    ]
+
+    return any(k in t for k in keywords)
+
 
 def fetch_jobs():
 
     jobs = []
 
-    for source in RSS_FEEDS:
+    for source in SEARCH_URLS:
 
         print("Fetching:", source["url"])
 
-        feed = feedparser.parse(source["url"])
+        try:
 
-        print("Entries found:", len(feed.entries))
+            response = requests.get(
+                source["url"],
+                headers=HEADERS,
+                timeout=20
+            )
 
-        for entry in feed.entries:
+            soup = BeautifulSoup(
+                response.text,
+                "html.parser"
+            )
 
-            title = entry.get("title", "").strip()
+            titles = soup.find_all("h3")
 
-            if not title:
-                continue
+            print("Titles found:", len(titles))
 
-            if not is_relevant(title):
-                continue
+            for t in titles:
 
-            jobs.append({
+                title = t.get_text(strip=True)
 
-                "Job Title": title,
+                if not title:
+                    continue
 
-                "Company": entry.get(
-                    "author",
-                    "Unknown"
-                ),
+                if not is_relevant(title):
+                    continue
 
-                "Portal": source["portal"],
+                jobs.append({
 
-                "Location": source["location"],
+                    "Job Title": title,
 
-                "Hybrid/Remote": source["mode"],
+                    "Company": "Google Search",
 
-                "Posted Date": entry.get(
-                    "published",
-                    ""
-                ),
+                    "Portal": source["portal"],
 
-                "Salary (LPA)": estimate_salary(title),
+                    "Location": source["location"],
 
-                "Score": score_job(title),
+                    "Hybrid/Remote": source["mode"],
 
-                "Apply Link": entry.get(
-                    "link",
-                    ""
-                )
-            })
+                    "Posted Date": str(
+                        datetime.now().date()
+                    ),
+
+                    "Salary (LPA)": estimate_salary(title),
+
+                    "Score": score_job(title),
+
+                    "Apply Link": source["url"]
+                })
+
+        except Exception as e:
+
+            print("Error:", str(e))
 
     return jobs
 
 
-# ---------------------------------------------------
-# MAIN
-# ---------------------------------------------------
-
 def main():
 
-    print("🚀 Running QA Job Bot V5")
+    print("🚀 Running QA Job Bot V6")
 
     jobs = fetch_jobs()
 
-    print("Total jobs fetched:", len(jobs))
-
-    # ---------------------------------------------------
-    # FALLBACK
-    # ---------------------------------------------------
+    print("Jobs fetched:", len(jobs))
 
     if not jobs:
 
         jobs = [{
-            "Job Title": "No matching QA jobs found today",
+            "Job Title": "No QA jobs found today",
             "Company": "-",
             "Portal": "-",
             "Location": "-",
@@ -211,29 +175,20 @@ def main():
             "Apply Link": "-"
         }]
 
-    # ---------------------------------------------------
-    # DATAFRAME
-    # ---------------------------------------------------
-
     df = pd.DataFrame(jobs)
 
-    # Remove duplicates
     df = df.drop_duplicates(
-        subset=["Job Title", "Company"]
+        subset=["Job Title"]
     )
 
-    # Sort by score
     if "Score" in df.columns:
+
         df = df.sort_values(
             by="Score",
             ascending=False
         )
 
     filename = f"QA_Jobs_{datetime.now().date()}.xlsx"
-
-    # ---------------------------------------------------
-    # EXCEL EXPORT
-    # ---------------------------------------------------
 
     with pd.ExcelWriter(
         filename,
@@ -248,7 +203,6 @@ def main():
 
         ws = writer.sheets["QA Jobs"]
 
-        # Auto-width columns
         for col in ws.columns:
 
             max_length = 0
@@ -263,21 +217,15 @@ def main():
                 except:
                     pass
 
-            adjusted_width = min(
+            ws.column_dimensions[
+                column
+            ].width = min(
                 max_length + 5,
                 50
             )
 
-            ws.column_dimensions[
-                column
-            ].width = adjusted_width
+    print("✅ Excel saved:", filename)
 
-    print(f"✅ Excel saved: {filename}")
-
-
-# ---------------------------------------------------
-# START
-# ---------------------------------------------------
 
 if __name__ == "__main__":
     main()
