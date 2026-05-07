@@ -1,43 +1,43 @@
+import pandas as pd
+from datetime import datetime
+
 def main():
-    print("🚀 Running V4 Job Bot")
+    print("🚀 Job bot started")
 
-    jobs = fetch_jobs()
-
-    print("Fetched jobs:", len(jobs))
-
-    # ✅ Create fallback row if empty
-    if not jobs:
-        jobs = [{
-            "Job Title": "No matching jobs found today",
-            "Company": "-",
-            "Portal": "-",
-            "Location": "India",
-            "Hybrid/Remote": "-",
+    # ✅ Static safe sample data
+    jobs = [
+        {
+            "Job Title": "Senior QA Automation Lead - Selenium Playwright",
+            "Company": "Tech Mahindra",
+            "Portal": "Indeed",
+            "Location": "Hyderabad",
+            "Hybrid/Remote": "Hybrid",
             "Posted Date": str(datetime.now().date()),
-            "Salary (LPA)": "-",
-            "Apply Link": "-"
-        }]
+            "Salary (LPA)": "28-40",
+            "Apply Link": "https://example.com/job1"
+        },
+        {
+            "Job Title": "SDET Lead API Automation",
+            "Company": "Infosys",
+            "Portal": "Naukri",
+            "Location": "Remote India",
+            "Hybrid/Remote": "Remote",
+            "Posted Date": str(datetime.now().date()),
+            "Salary (LPA)": "25-35",
+            "Apply Link": "https://example.com/job2"
+        }
+    ]
 
-    df = pd.DataFrame(jobs).drop_duplicates()
+    df = pd.DataFrame(jobs)
 
     filename = f"QA_Jobs_{datetime.now().date()}.xlsx"
 
-    with pd.ExcelWriter(filename, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="QA Jobs")
+    print("Creating Excel:", filename)
 
-        ws = writer.sheets["QA Jobs"]
+    df.to_excel(filename, index=False)
 
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter
+    print("✅ Excel created successfully")
 
-            for cell in col:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
 
-            ws.column_dimensions[column].width = min(max_length + 5, 50)
-
-    print(f"✅ Saved: {filename}")
+if __name__ == "__main__":
+    main()
