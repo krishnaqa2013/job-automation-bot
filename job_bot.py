@@ -2,61 +2,98 @@ import feedparser
 import pandas as pd
 from datetime import datetime
 
-# 🔹 RSS URLs (last 3 days filter built-in)
 RSS_FEEDS = [
-    "https://in.indeed.com/rss?q=QA+Automation+Lead&l=India&fromage=3",
-    "https://in.indeed.com/rss?q=Senior+SDET+Automation&l=India&fromage=3",
-    "https://in.indeed.com/rss?q=Test+Automation+Architect&l=India&fromage=3"
+    {
+        "portal": "Indeed",
+        "url": "https://in.indeed.com/rss?q=QA+Automation+Lead&l=India&fromage=3"
+    },
+    {
+        "portal": "Indeed",
+        "url": "https://in.indeed.com/rss?q=Senior+SDET+Automation&l=India&fromage=3"
+    },
+    {
+        "portal": "Indeed",
+        "url": "https://in.indeed.com/rss?q=Test+Automation+Architect+Selenium&l=India&fromage=3"
+    }
 ]
 
 
-# 🔹 Fetch jobs from RSS
+def detect_work_mode(title):
+    t = title.lower()
+
+    if "remote" in t:
+        return "Remote"
+
+    return "Hybrid"
+
+
+def estimate_salary(title):
+    t = title.lower()
+
+    if "architect" in t:
+        return "35-50"
+
+    if "lead" in t:
+        return "28-40"
+
+    if "manager" in t:
+        return "30-45"
+
+    if "sdet" in t:
+        return "25-35"
+
+    return "20-30"
+
+
 def fetch_jobs():
     jobs = []
 
-    for url in RSS_FEEDS:
+    for feed_info in RSS_FEEDS:
+        portal = feed_info["portal"]
+        url = feed_info["url"]
+
         feed = feedparser.parse(url)
 
         for entry in feed.entries:
+
+            title = entry.get("title", "").strip()
+
+            if not title:
+                continue
+
+            lower_title = title.lower()
+
+            # Strong filtering
+            if not any(x in lower_title for x in [
+                "qa", "sdet", "automation"
+            ]):
+                continue
+
+            if not any(x in lower_title for x in [
+                "lead", "senior", "architect", "manager"
+            ]):
+                continue
+
             jobs.append({
-                "Title": entry.title,
+                "Job Title": title,
                 "Company": entry.get("author", "Unknown"),
-                "Link": entry.link,
-                "Published": entry.get("published", ""),
-                "Source": "Indeed RSS"
+                "Portal": portal,
+                "Location": "Hyderabad / India",
+                "Hybrid/Remote": detect_work_mode(title),
+                "Posted Date": entry.get("published", ""),
+                "Salary (LPA)": estimate_salary(title),
+                "Apply Link": entry.get("link", "")
             })
 
     return jobs
 
 
-# 🔹 Filter
-def filter_jobs(df):
-    df = df[df["Title"].str.contains("QA|SDET|Automation", case=False)]
-    df = df[df["Title"].str.contains("Senior|Lead|Architect|Manager", case=False)]
-    df = df[df["Title"].str.contains("Selenium|Playwright|API", case=False)]
-    return df
-
-
-# 🔹 Score
-def score_job(title):
-    score = 0
-    t = title.lower()
-
-    if "playwright" in t: score += 3
-    if "selenium" in t: score += 2
-    if "api" in t: score += 2
-    if "lead" in t or "architect" in t: score += 2
-    if "manager" in t: score += 1
-
-    return score
-
-
-# 🔹 Main
 def main():
-    print("🚀 Running V3 Job Bot (RSS Mode)...")
+    print("🚀 Running V4 Job Bot")
 
     jobs = fetch_jobs()
-    print("Fetched:", len(jobs))
+
+    print("Fetched jobs:", len(jobs))
 
     if not jobs:
         print("❌ No jobs fetched")
@@ -64,23 +101,31 @@ def main():
 
     df = pd.DataFrame(jobs).drop_duplicates()
 
-    df = filter_jobs(df)
-
-    if df.empty:
-        print("⚠️ No jobs after filtering")
-        return
-
-    df["Score"] = df["Title"].apply(score_job)
-
-    df = df[df["Score"] >= 4]
-
-    df = df.sort_values(by="Score", ascending=False)
+    # Sort latest first
+    df = df.sort_values(by="Posted Date", ascending=False)
 
     filename = f"QA_Jobs_{datetime.now().date()}.xlsx"
-    df.to_excel(filename, index=False)
+
+    with pd.ExcelWriter(filename, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="QA Jobs")
+
+        ws = writer.sheets["QA Jobs"]
+
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+
+            adjusted_width = min(max_length + 5, 50)
+            ws.column_dimensions[column].width = adjusted_width
 
     print(f"✅ Saved: {filename}")
-    print("Final jobs:", len(df))
 
 
 if __name__ == "__main__":
